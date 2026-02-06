@@ -379,6 +379,7 @@ export default function App() {
     setHasBingo(false);
     setCardKey(k => k + 1);
     setElapsedTime(0);
+    track('reshuffle', { guest: currentEpisode.guest, hardMode: isHardMode });
   }, [currentEpisode, isHardMode]);
 
   // Select specific episode
@@ -450,6 +451,21 @@ export default function App() {
     }
   }, [currentEpisode, score, hasBingo, currentSeed]);
 
+  // Toggle functions with tracking
+  const toggleMute = useCallback((source = 'button') => {
+    setIsMuted(m => {
+      track('mute-toggle', { muted: !m, source });
+      return !m;
+    });
+  }, []);
+
+  const toggleDarkMode = useCallback((source = 'button') => {
+    setIsDark(d => {
+      track('dark-mode-toggle', { dark: !d, source });
+      return !d;
+    });
+  }, []);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -461,23 +477,31 @@ export default function App() {
         // Mark hovered cell, or first unmarked cell
         if (hoveredCell !== null && hoveredCell !== 12 && !marked.has(hoveredCell)) {
           toggleCell(hoveredCell);
+          track('keyboard-shortcut', { key: 'space', action: 'mark-cell' });
         } else {
           const firstUnmarked = cells.findIndex((_, i) => i !== 12 && !marked.has(i));
-          if (firstUnmarked !== -1) toggleCell(firstUnmarked);
+          if (firstUnmarked !== -1) {
+            toggleCell(firstUnmarked);
+            track('keyboard-shortcut', { key: 'space', action: 'mark-cell' });
+          }
         }
       } else if (e.key === 'r' || e.key === 'R') {
         reshuffle();
+        track('keyboard-shortcut', { key: 'r', action: 'reshuffle' });
       } else if (e.key === 'n' || e.key === 'N') {
         newCard();
+        track('keyboard-shortcut', { key: 'n', action: 'new-card' });
       } else if (e.key === 'm' || e.key === 'M') {
-        setIsMuted(m => !m);
+        toggleMute('keyboard');
+        track('keyboard-shortcut', { key: 'm', action: 'toggle-mute' });
       } else if (e.key === 'd' || e.key === 'D') {
-        setIsDark(d => !d);
+        toggleDarkMode('keyboard');
+        track('keyboard-shortcut', { key: 'd', action: 'toggle-dark' });
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hoveredCell, marked, cells, toggleCell, reshuffle, newCard]);
+  }, [hoveredCell, marked, cells, toggleCell, reshuffle, newCard, toggleMute, toggleDarkMode]);
 
   return (
     <>
@@ -623,7 +647,7 @@ export default function App() {
         }}>
           {/* Dark Mode */}
           <button
-            onClick={() => setIsDark(d => !d)}
+            onClick={() => toggleDarkMode('button')}
             title="Toggle dark mode (D)"
             style={{
               background: 'var(--bg-card)',
@@ -646,7 +670,7 @@ export default function App() {
 
           {/* Mute */}
           <button
-            onClick={() => setIsMuted(m => !m)}
+            onClick={() => toggleMute('button')}
             title="Toggle sound (M)"
             style={{
               background: 'var(--bg-card)',
