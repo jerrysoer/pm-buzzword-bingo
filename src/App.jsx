@@ -1,5 +1,26 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import html2canvas from 'html2canvas';
 import episodes from './data/episodes.json';
+
+// Calculate buzzword frequencies across all episodes
+const buzzwordFrequencies = (() => {
+  const counts = {};
+  episodes.forEach(ep => {
+    ep.buzzwordsFound.forEach(bw => {
+      counts[bw] = (counts[bw] || 0) + 1;
+    });
+  });
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([word, count]) => ({ word, count, percent: Math.round(count / episodes.length * 100) }));
+})();
+
+// Format time as mm:ss
+const formatTime = (seconds) => {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+};
 
 // Analytics wrapper (placeholder for Umami)
 const track = (event, data) => {
@@ -188,9 +209,23 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [splatVariants] = useState(() => Array.from({ length: 25 }, () => Math.floor(Math.random() * 3)));
   const [cardKey, setCardKey] = useState(0);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [showStats, setShowStats] = useState(false);
   const audioCtxRef = useRef(null);
+  const cardRef = useRef(null);
+  const timerRef = useRef(null);
 
   const score = marked.size - 1; // Exclude FREE space
+
+  // Timer effect
+  useEffect(() => {
+    if (!hasBingo) {
+      timerRef.current = setInterval(() => {
+        setElapsedTime(t => t + 1);
+      }, 1000);
+    }
+    return () => clearInterval(timerRef.current);
+  }, [hasBingo, cardKey]);
 
   // Initialize audio context on first user interaction
   const ensureAudioContext = useCallback(() => {
@@ -250,6 +285,7 @@ export default function App() {
     setMarked(new Set([12]));
     setHasBingo(false);
     setCardKey(k => k + 1);
+    setElapsedTime(0);
     track('new-card', { guest: ep.guest, episode: ep.title });
   }, []);
 
@@ -259,6 +295,7 @@ export default function App() {
     setMarked(new Set([12]));
     setHasBingo(false);
     setCardKey(k => k + 1);
+    setElapsedTime(0);
   }, [currentEpisode]);
 
   // Select specific episode
@@ -270,8 +307,27 @@ export default function App() {
     setShowPicker(false);
     setSearchQuery('');
     setCardKey(k => k + 1);
+    setElapsedTime(0);
     track('episode-selected', { guest: ep.guest });
   }, []);
+
+  // Screenshot download
+  const downloadScreenshot = useCallback(async () => {
+    if (!cardRef.current) return;
+    try {
+      const canvas = await html2canvas(cardRef.current, {
+        backgroundColor: '#F5EDD6',
+        scale: 2,
+      });
+      const link = document.createElement('a');
+      link.download = `bingo-${toSlug(currentEpisode.guest)}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      track('screenshot-downloaded', { guest: currentEpisode.guest });
+    } catch (e) {
+      console.error('Screenshot failed:', e);
+    }
+  }, [currentEpisode]);
 
   // Share
   const share = useCallback(async () => {
@@ -438,7 +494,7 @@ export default function App() {
         </div>
 
         {/* Bingo Card */}
-        <div style={{
+        <div ref={cardRef} style={{
           background: '#FFFDF5',
           border: '4px solid #1B3A5C',
           borderRadius: 16,
@@ -619,7 +675,7 @@ export default function App() {
           marginTop: 20,
           flexWrap: 'wrap',
         }}>
-          {/* Score */}
+          {/* Score & Timer */}
           <div style={{
             background: '#FFFDF5',
             border: '3px solid #1B3A5C',
@@ -627,20 +683,56 @@ export default function App() {
             padding: '8px 16px',
             boxShadow: '3px 3px 0 rgba(27,58,92,0.08)',
             display: 'flex',
-            alignItems: 'baseline',
-            gap: 4,
+            alignItems: 'center',
+            gap: 12,
           }}>
-            <span style={{
-              fontFamily: "'Bebas Neue', sans-serif",
-              fontSize: 32,
-              color: '#C43E1C',
-            }}>{score}</span>
-            <span style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: '#9C8E72',
-            }}>/24 stamped</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+              <span style={{
+                fontFamily: "'Bebas Neue', sans-serif",
+                fontSize: 32,
+                color: '#C43E1C',
+              }}>{score}</span>
+              <span style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: '#9C8E72',
+              }}>/24</span>
+            </div>
+            <div style={{ width: 1, height: 24, background: '#D6CDB8' }} />
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+              <span style={{
+                fontFamily: "'Bebas Neue', sans-serif",
+                fontSize: 24,
+                color: hasBingo ? '#E8A838' : '#1B3A5C',
+              }}>{formatTime(elapsedTime)}</span>
+              <span style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: '#9C8E72',
+              }}>⏱️</span>
+            </div>
           </div>
+
+          {/* Screenshot */}
+          <button
+            onClick={downloadScreenshot}
+            style={{
+              background: '#FFFDF5',
+              border: '2px solid #D6CDB8',
+              borderRadius: 10,
+              padding: '10px 16px',
+              fontSize: 14,
+              fontWeight: 600,
+              fontFamily: "'Outfit', sans-serif",
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              color: '#3A3225',
+            }}
+            onMouseEnter={e => { e.target.style.borderColor = '#1B3A5C'; e.target.style.transform = 'translateY(-1px)'; }}
+            onMouseLeave={e => { e.target.style.borderColor = '#D6CDB8'; e.target.style.transform = 'translateY(0)'; }}
+          >
+            📸 Save
+          </button>
 
           {/* Share */}
           <button
@@ -816,6 +908,87 @@ export default function App() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Buzzword Stats */}
+        <div style={{ marginTop: 24 }}>
+          <button
+            onClick={() => setShowStats(!showStats)}
+            style={{
+              width: '100%',
+              background: '#FFFDF5',
+              border: '2px solid #D6CDB8',
+              borderRadius: 10,
+              padding: '12px 16px',
+              fontSize: 14,
+              fontWeight: 600,
+              fontFamily: "'Outfit', sans-serif",
+              cursor: 'pointer',
+              color: '#3A3225',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <span>📊 Buzzword Frequency Heatmap</span>
+            <span style={{ transform: showStats ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 0.2s' }}>▼</span>
+          </button>
+
+          {showStats && (
+            <div style={{
+              marginTop: 8,
+              background: '#FFFDF5',
+              border: '2px solid #D6CDB8',
+              borderRadius: 10,
+              padding: 16,
+              maxHeight: 300,
+              overflowY: 'auto',
+            }}>
+              <p style={{ fontSize: 11, color: '#9C8E72', margin: '0 0 12px', textAlign: 'center' }}>
+                How often each buzzword appears across {episodes.length} episodes
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {buzzwordFrequencies.slice(0, 30).map(({ word, count, percent }) => (
+                  <div key={word} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{
+                      flex: 1,
+                      fontSize: 12,
+                      fontWeight: 500,
+                      color: '#3A3225',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}>{word}</div>
+                    <div style={{
+                      width: 120,
+                      height: 16,
+                      background: '#F5EDD6',
+                      borderRadius: 8,
+                      overflow: 'hidden',
+                    }}>
+                      <div style={{
+                        width: `${percent}%`,
+                        height: '100%',
+                        background: percent > 80 ? '#C43E1C' : percent > 50 ? '#E8A838' : '#1B3A5C',
+                        borderRadius: 8,
+                        transition: 'width 0.3s',
+                      }} />
+                    </div>
+                    <div style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: '#9C8E72',
+                      width: 36,
+                      textAlign: 'right',
+                    }}>{percent}%</div>
+                  </div>
+                ))}
+              </div>
+              <p style={{ fontSize: 10, color: '#9C8E72', margin: '12px 0 0', textAlign: 'center' }}>
+                🔴 &gt;80% &nbsp; 🟠 50-80% &nbsp; 🔵 &lt;50%
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
