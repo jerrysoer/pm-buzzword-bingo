@@ -692,51 +692,51 @@ export default function App() {
         </div>
 
         {/* Guest Badge */}
-        <div style={{ textAlign: 'center', marginBottom: 20, animation: 'slideDown 0.5s ease-out' }}>
+        <div style={{ textAlign: 'center', marginBottom: 16, animation: 'slideDown 0.5s ease-out' }}>
           <div style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 10,
+            gap: 8,
             background: 'var(--text-primary)',
-            padding: '10px 20px',
+            padding: '8px 10px 8px 14px',
             borderRadius: 100,
             boxShadow: '0 3px 12px rgba(27,58,92,0.2)',
           }}>
-            <span style={{ fontSize: 15 }}>🎙️</span>
-            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>Today's Guest</span>
-            <div style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.15)' }} />
+            <span style={{ fontSize: 13 }}>🎙️</span>
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-tertiary)' }}>{currentEpisode.guest}</span>
+            <a
+              href={currentEpisode.youtubeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => track('youtube-click', { guest: currentEpisode.guest, videoId: currentEpisode.videoId })}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                background: 'var(--accent-primary)',
+                color: 'white',
+                fontSize: 11,
+                fontWeight: 600,
+                padding: '5px 10px',
+                borderRadius: 100,
+                textDecoration: 'none',
+                transition: 'all 0.15s',
+              }}
+            >
+              ▶ Watch
+            </a>
           </div>
           <p style={{
-            fontSize: 12,
+            fontSize: 11,
             color: 'var(--text-muted)',
-            fontStyle: 'italic',
-            margin: '10px 0',
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
+            margin: '8px 0 0',
+            whiteSpace: 'nowrap',
             overflow: 'hidden',
-            lineHeight: 1.4,
+            textOverflow: 'ellipsis',
+            maxWidth: '90%',
+            marginLeft: 'auto',
+            marginRight: 'auto',
           }}>{currentEpisode.title}</p>
-          <a
-            href={currentEpisode.youtubeUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => track('youtube-click', { guest: currentEpisode.guest, videoId: currentEpisode.videoId })}
-            style={{
-              display: 'inline-block',
-              background: 'var(--accent-primary)',
-              color: 'white',
-              fontSize: 11,
-              fontWeight: 600,
-              padding: '6px 14px',
-              borderRadius: 100,
-              textDecoration: 'none',
-              transition: 'all 0.15s',
-            }}
-          >
-            ▶ Watch on YouTube
-          </a>
         </div>
 
         {/* Bingo Card */}
