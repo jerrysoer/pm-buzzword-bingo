@@ -316,8 +316,27 @@ export default function App() {
     if (!cardRef.current) return;
     try {
       const canvas = await html2canvas(cardRef.current, {
-        backgroundColor: '#F5EDD6',
+        backgroundColor: '#FFFDF5',
         scale: 2,
+        useCORS: true,
+        logging: false,
+        onclone: (clonedDoc) => {
+          // Fix grid rendering by removing animations and ensuring visibility
+          const clonedCard = clonedDoc.querySelector('[data-card]');
+          if (clonedCard) {
+            // Remove all animations
+            clonedCard.querySelectorAll('*').forEach(el => {
+              el.style.animation = 'none';
+              el.style.opacity = '1';
+              el.style.transform = 'none';
+            });
+            // Ensure grid cells are visible
+            clonedCard.querySelectorAll('[data-cell]').forEach(el => {
+              el.style.opacity = '1';
+              el.style.transform = 'scale(1)';
+            });
+          }
+        }
       });
       const link = document.createElement('a');
       link.download = `bingo-${toSlug(currentEpisode.guest)}.png`;
@@ -494,7 +513,7 @@ export default function App() {
         </div>
 
         {/* Bingo Card */}
-        <div ref={cardRef} style={{
+        <div ref={cardRef} data-card style={{
           background: '#FFFDF5',
           border: '4px solid #1B3A5C',
           borderRadius: 16,
@@ -554,6 +573,7 @@ export default function App() {
               return (
                 <div
                   key={i}
+                  data-cell
                   onClick={() => toggleCell(i)}
                   style={{
                     aspectRatio: '1',
