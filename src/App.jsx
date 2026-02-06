@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import episodes from './data/episodes.json';
 
 // Analytics wrapper (placeholder for Umami)
@@ -8,6 +8,67 @@ const track = (event, data) => {
   } catch (e) {
     // Analytics failure should never affect the app
   }
+};
+
+// Convert guest name to URL slug
+const toSlug = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+// Find episode by slug
+const findEpisodeBySlug = (slug) => {
+  if (!slug) return null;
+  return episodes.find(e => toSlug(e.guest) === slug);
+};
+
+// Get initial episode from URL or random
+const getInitialEpisode = () => {
+  const params = new URLSearchParams(window.location.search);
+  const slug = params.get('episode');
+  const found = findEpisodeBySlug(slug);
+  return found || episodes[Math.floor(Math.random() * episodes.length)];
+};
+
+// Sound effects using Web Audio API
+const createAudioContext = () => {
+  try {
+    return new (window.AudioContext || window.webkitAudioContext)();
+  } catch (e) {
+    return null;
+  }
+};
+
+const playStampSound = (audioCtx) => {
+  if (!audioCtx) return;
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.1);
+  } catch (e) {}
+};
+
+const playBingoSound = (audioCtx) => {
+  if (!audioCtx) return;
+  try {
+    const notes = [523, 659, 784, 1047]; // C5, E5, G5, C6
+    notes.forEach((freq, i) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime + i * 0.15);
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.2, audioCtx.currentTime + i * 0.15);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + i * 0.15 + 0.3);
+      osc.start(audioCtx.currentTime + i * 0.15);
+      osc.stop(audioCtx.currentTime + i * 0.15 + 0.3);
+    });
+  } catch (e) {}
 };
 
 // Fisher-Yates shuffle
@@ -118,7 +179,7 @@ const Confetti = () => {
 };
 
 export default function App() {
-  const [currentEpisode, setCurrentEpisode] = useState(() => episodes[Math.floor(Math.random() * episodes.length)]);
+  const [currentEpisode, setCurrentEpisode] = useState(getInitialEpisode);
   const [cells, setCells] = useState(() => generateCard(currentEpisode));
   const [marked, setMarked] = useState(() => new Set([12])); // FREE space
   const [hasBingo, setHasBingo] = useState(false);
@@ -127,8 +188,25 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [splatVariants] = useState(() => Array.from({ length: 25 }, () => Math.floor(Math.random() * 3)));
   const [cardKey, setCardKey] = useState(0);
+  const audioCtxRef = useRef(null);
 
   const score = marked.size - 1; // Exclude FREE space
+
+  // Initialize audio context on first user interaction
+  const ensureAudioContext = useCallback(() => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = createAudioContext();
+    }
+    return audioCtxRef.current;
+  }, []);
+
+  // Update URL when episode changes
+  useEffect(() => {
+    const slug = toSlug(currentEpisode.guest);
+    const url = new URL(window.location.href);
+    url.searchParams.set('episode', slug);
+    window.history.replaceState({}, '', url);
+  }, [currentEpisode]);
 
   // Filter episodes for picker
   const filteredEpisodes = useMemo(() => {
@@ -143,23 +221,26 @@ export default function App() {
   // Toggle cell marking
   const toggleCell = useCallback((index) => {
     if (index === 12) return; // Can't toggle FREE
+    const ctx = ensureAudioContext();
     setMarked(prev => {
       const next = new Set(prev);
       if (next.has(index)) {
         next.delete(index);
       } else {
         next.add(index);
+        playStampSound(ctx);
       }
       const bingo = checkBingo(next);
       if (bingo && !hasBingo) {
         setHasBingo(true);
+        setTimeout(() => playBingoSound(ctx), 100);
         track('bingo', { guest: currentEpisode.guest, score: next.size - 1 });
       } else if (!bingo && hasBingo) {
         setHasBingo(false);
       }
       return next;
     });
-  }, [hasBingo, currentEpisode]);
+  }, [hasBingo, currentEpisode, ensureAudioContext]);
 
   // New random episode
   const newCard = useCallback(() => {
@@ -194,10 +275,10 @@ export default function App() {
 
   // Share
   const share = useCallback(async () => {
-    const siteUrl = 'https://jerrysoer.github.io/pm-buzzword-bingo/';
+    const episodeUrl = `https://jerrysoer.github.io/pm-buzzword-bingo/?episode=${toSlug(currentEpisode.guest)}`;
     const text = hasBingo
-      ? `🎯 BINGO! Checked ${score} squares playing PM Buzzword Bingo listening to ${currentEpisode.guest} on @LennysPodcast!\n\n▶ Play along with this episode: ${currentEpisode.youtubeUrl}\n🎲 Get your own card → ${siteUrl}`
-      : `Listening to ${currentEpisode.guest} on @LennysPodcast — ${score}/24 squares checked on PM Buzzword Bingo so far 🎲\n\n▶ Episode: ${currentEpisode.youtubeUrl}\nPlay along → ${siteUrl}`;
+      ? `🎯 BINGO! Checked ${score} squares playing PM Buzzword Bingo listening to ${currentEpisode.guest} on @LennysPodcast!\n\n▶ Play along with this episode: ${currentEpisode.youtubeUrl}\n🎲 Get your own card → ${episodeUrl}`
+      : `Listening to ${currentEpisode.guest} on @LennysPodcast — ${score}/24 squares checked on PM Buzzword Bingo so far 🎲\n\n▶ Episode: ${currentEpisode.youtubeUrl}\nPlay along → ${episodeUrl}`;
 
     try {
       await navigator.clipboard.writeText(text);
