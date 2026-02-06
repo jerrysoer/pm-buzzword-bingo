@@ -481,15 +481,20 @@ export default function App() {
                   {/* Cell text */}
                   <span style={{
                     fontFamily: "'Outfit', sans-serif",
-                    fontSize: 'clamp(8px, 1.3vw, 12px)',
+                    fontSize: 'clamp(10px, 2.5vw, 13px)',
                     fontWeight: isFree ? 800 : isMarked ? 700 : 500,
                     color: isFree ? '#5C3A0A' : isMarked ? '#8B2500' : '#3A3225',
                     textAlign: 'center',
-                    lineHeight: 1.2,
+                    lineHeight: 1.15,
                     position: 'relative',
                     zIndex: 1,
                     wordBreak: 'break-word',
                     hyphens: 'auto',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    maxWidth: '100%',
                   }}>
                     {isFree ? 'FREE SPACE' : cell}
                   </span>
