@@ -25,3 +25,8 @@ dist-ssr
 
 # Cloned transcript data (regenerable)
 data/transcripts/
+
+# Environment variables (if added later)
+.env
+.env.local
+.env.*.local
